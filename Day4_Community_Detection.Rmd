@@ -1,0 +1,347 @@
+---
+author: "Eric Hsienchen Chu"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE, fig.align="center", fig.height = 5, fig.width = 8)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+
+#library(plm)       # Panel data analysis library
+#library(car)       # Companion to applied regression 
+#library(tseries)   # For timeseries analysis
+#library(lmtest)    # For hetoroskedasticity analysis
+#library(directlabels)
+#library(ggrepel)
+#library(ggtext)
+#library(gganimate)
+#library(gifski)
+#library(kableExtra)
+#library(ggpubr)
+#library(rddtools)
+#library(magrittr)
+#library(maps)
+#library(mapdata)
+#library(broom)  # Convert models to data frames
+#library(rdrobust)  # For robust nonparametric regression discontinuity
+#library(estimatr)  # Run 2SLS models in one step with iv_robust()
+#library(ivreg)
+#library(ivmodel)
+#library(gtools)
+
+# network
+library(sna)
+library(igraph)
+library(threejs)
+library(ggplot2)
+library(ggraph)
+library(ggrepel)
+library(intergraph)
+library(tidygraph)
+library(xUCINET)
+
+#source("../viridis.R")
+```
+
+## [SNA LINKS 2023] 
+
+#### Author: Eric Hsienchen Chu
+
+#### Date: June 7, 2022
+
+
+- - -
+
+#### TA: Francisco Trincado-Munoz
+
+#### SCRIPT Day4-2 - [Intermediate SNA with R (LINKS Workshop 2023](https://www.linksworkshop.org/intermediate-sna-r))
+
+- - -
+
+#### I. Cliques 
+
+
+```{r}
+# fix the random factor
+set.seed(12345)
+```
+
+```{r}
+Hawthorne_BankWiring$ProjectInfo
+
+# Drawing the network
+par(mar = c(0, 0, 0, 0))
+gplot(Hawthorne_BankWiring$Game, displaylabels = T, gmode="graph")
+
+#xCliquesMembership() helps to find the cliques to min X distance
+
+# Distance 3
+xCliquesMembership(Hawthorne_BankWiring$Game, Min=3)
+
+# Distance 5
+xCliquesMembership(Hawthorne_BankWiring$Game, Min=5)
+
+#xCliquesCoMembership() helps the co-occurrence of members that belong to a clique with distance
+
+xCliquesCoMembership(Hawthorne_BankWiring$Game)
+
+xCliquesCoMembership(Hawthorne_BankWiring$Game, Min=5)
+
+
+# Clustering based on clique co-membership
+
+CO<-xCliquesCoMembership(Hawthorne_BankWiring$Game, Min=3)
+
+xHierarchicalClustering(CO, Method="average", Input="Similarities")
+
+View(xHierarchicalClustering)
+```
+
+- - - 
+
+#### II. Community Detection 
+
+What is `Community Detection`? Find groups with a high density of connections within and a low density between groups (i.e., more connected to each other than to the rest of the network)
+
+`Modularity`: The modularity measures the density of connection within clusters compared to the density of connections between clusters (Blondel 2008). 
+
+The higher the modularity of a graph, the more connected the vertices are inside the subgroups compared to between the subgroups, and therefore the more certain we can be that the subgroups represent genuine communities of more intense connection. 
+
+
+```{r}
+###################### Using xUCINET ########################
+# Option 1: Girvan-Newman algorithm
+# The Girvan-Newman algorithm takes the entire graph and progressively 
+# removes important edges to potentially reveal high modularity subgroups.
+
+# Use the function xGirvanNewman()
+# margin parameter using the syntax par(mar = c(bottom, left, top, right))
+par(mar = c(2, 2, 2, 2))
+xGirvanNewman(Zachary_KarateClub$Connection, vertex.label.cex=.7)
+
+# The output is two plots + a Cluster list
+
+# Plot 1: The optimal number of communities with Max Modularity
+# Plot 2: The network with the communities highlighted
+
+dev.off()
+
+CD_ZC_GN1 <- xGirvanNewman(Zachary_KarateClub$Connection, vertex.label.cex=.7)
+CD_ZC_GN1
+
+#To get the communities only
+CD_ZC_GN1[,"CL_5"]
+
+
+#You can request the communnities with 2 & 5 using the following argument:
+
+xGirvanNewman(Zachary_KarateClub$Connection, NOC=c(2,5), vertex.label.cex=.7)
+
+#==> if you decide to use the 2 communities
+xGirvanNewman(Zachary_KarateClub$Connection, NOC=c(2,5), vertex.label.cex=.7)[,"CL_2"]
+
+
+##### If you want to change the shapes of the nodes
+
+## a. Define the shapes to be used
+
+UseShapes<-c("circle","rectangle")
+
+## b. Define the vector for nodes -
+
+ZKAttrClub<-(Zachary_KarateClub$Attributes$Club>1)+1
+
+## c. Run the community detection with vertex.shape argument
+
+xGirvanNewman(Zachary_KarateClub$Connection, NOC=c(2,5), vertex.shape=UseShapes[ZKAttrClub],
+              vertex.label.cex=.7)
+```
+
+
+```{r}
+######### Option 2: Fast Greedy
+# It is a hierarchical approach. It works bottom-up rather than top-down. 
+# It tries to optimize the modularity in a greedy manner. 
+# Initially, every vertex belongs to a separate community, and communities are merged iteratively 
+# such that each merge is locally optimal (i.e. yields the largest increase in the current value of modularity). 
+# The algorithm stops when it is not possible to increase the modularity any more.
+
+xFastGreedy(Zachary_KarateClub$Connection, vertex.label.cex=.7, vertex.shape=UseShapes[ZKAttrClub])
+
+# Output: 3 communities
+```
+
+
+```{r}
+######## Option 3: Walktrap
+# The walktrap algorithm finds communities through a series of short random walks (4 edges by default).
+# The walks are more likely to stay within the same community because there are only a few edges that lead outside a given community. 
+
+xWalkTrap(Zachary_KarateClub$Connection, vertex.label.cex = .7, vertex.shape=UseShapes[ZKAttrClub])
+
+#Output: 5 communities
+```
+
+
+```{r}
+# Option 4: Louvain
+# Also known as multilevel algorithm tries to maximize the modularity by merging nodes into communities
+# When the algorithm reaches a point where further vertex moves do not increase modularity, it finishes its first phase.
+# In the second phase, the communities resulting from the first phase are aggregated into pseudograph where each
+# community is a node, each node is weighted by the number of members, and the edges are the weights of the total number 
+# of edges between those communities. The communities are once again moved into other communities to try to improve modularity.
+# Phases 1 & 2 are repeated until modularity cannot be further improved.
+
+xLouvainMethod(Zachary_KarateClub$Connection, vertex.label.cex=.7, vertex.shape=UseShapes[ZKAttrClub])
+View(xLouvainMethod)
+#Output: 4 communities
+```
+
+
+```{r}
+####### Option 5: Label Propagation
+# It is based on assigning one of k labels, then iteratively re-assigns the labels to nodes in a way that 
+# each node takes the most frequent label of its neighbors in a synchronous manner. 
+# The method stops when the label of each node is one of the most frequent labels in its neighborhood. 
+
+#It works with the repetition/frequency of labels for each node and neighbors
+
+xLabelPropagation(Zachary_KarateClub$Connection, vertex.label.cex=.7, vertex.shape=UseShapes[ZKAttrClub])
+
+#Output: 2 communities
+```
+
+
+Check more info here [https://www.r-bloggers.com/2012/06/summary-of-community-detection-algorithms-in-igraph-0-6/](https://www.r-bloggers.com/2012/06/summary-of-community-detection-algorithms-in-igraph-0-6/)
+
+
+```{r}
+###################### Using Igraph ########################
+
+library(igraph)
+#we can detach sna to avoid conflict
+detach("package:sna")
+
+BCD_m = as.matrix(read.csv("Borgatti_Cities_Distance.csv", 
+                          stringsAsFactors=FALSE, row.names=1))
+```
+
+
+```{r}
+# The matrix has the distance between cities
+# To use the matrix we need to dichotomize the data, hence we set a cut-off value
+
+cut_off <-1000  # that is the value that we choose to assign or not a tie
+
+# Before we do this, it is better to copy the network to keep the original safe (or for further use) 
+BCD_Di <- BCD_m
+
+# Now we set the conditions
+
+BCD_Di[BCD_Di<cut_off]<-1   #Lower than 1k gets a tie
+BCD_Di[BCD_Di>cut_off]<-0   #Higher than 1k does not get a tie
+
+# We also need to set the diagonal to zero
+diag(BCD_Di) <- 0
+
+View(BCD_Di)
+
+# We need to transform the data into an igraph object
+
+BCD_ig <- graph_from_adjacency_matrix(BCD_Di, mode ="undirected")
+BCD_ig
+```
+
+> Now we are ready to calculate te communities
+
+```{r}
+# Method 1: Louvain
+?cluster_louvain
+lou_comm <- cluster_louvain(BCD_ig) #weights
+
+#Check the object/list
+lou_comm
+
+#Get the modularity
+lou_comm$modularity
+
+# You can use the following functions to obtain more data
+membership(lou_comm)
+communities(lou_comm)
+plot(lou_comm, BCD_ig)
+```
+
+
+
+```{r}
+# Method 2: Infomap
+
+# It maps the flow of information in a network, and how the information remain longer
+
+infm_comm <- cluster_infomap(BCD_ig) #e.weights #v.weights
+
+#Check the object/list
+infm_comm
+
+#Get the modularity
+infm_comm$modularity
+
+membership(infm_comm)
+communities(infm_comm)
+plot(infm_comm, BCD_ig)
+
+
+#Others?
+cluster_label_prop(BCD_ig) 
+cluster_walktrap(BCD_ig) 
+cluster_fast_greedy(BCD_ig)
+
+# Edge Betweenness: It goes removing edges with high betweenness
+cluster_edge_betweenness(BCD_ig)
+```
+
+
+- - - 
+
+
+```{r}
+#### Using Zachary club data
+# (a) Data to igraph object
+
+Zachary_KarateClub_Connection <- graph_from_incidence_matrix(Zachary_KarateClub$Connection)
+
+lou_comm_ZC <- cluster_louvain(Zachary_KarateClub_Connection) #weights
+
+#Check the object/list
+lou_comm_ZC
+
+#Get the modularity
+lou_comm_ZC$modularity
+
+# You can use the following functions to obtain more data
+membership(lou_comm_ZC)
+communities(lou_comm_ZC)
+plot(lou_comm_ZC, Zachary_KarateClub_Connection)
+
+
+# Adjusting the resolution parameter of the modularity function 
+# allows to change the clusters size. 
+# Lower values typically yield fewer, larger clusters.
+# By default this is set to 1. 
+
+lou_comm_ZC <- cluster_louvain(Zachary_KarateClub_Connection, resolution = 0.5) #weights #resolution 
+
+membership(lou_comm_ZC)
+communities(lou_comm_ZC)
+plot(lou_comm_ZC, Zachary_KarateClub_Connection)
+```
+
+

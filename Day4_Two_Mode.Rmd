@@ -1,0 +1,517 @@
+---
+author: "Eric Hsienchen Chu"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE, fig.align="center", fig.height = 6, fig.width = 8)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+
+#library(plm)       # Panel data analysis library
+#library(car)       # Companion to applied regression 
+#library(tseries)   # For timeseries analysis
+#library(lmtest)    # For hetoroskedasticity analysis
+#library(directlabels)
+#library(ggrepel)
+#library(ggtext)
+#library(gganimate)
+#library(gifski)
+#library(kableExtra)
+#library(ggpubr)
+#library(rddtools)
+#library(magrittr)
+#library(maps)
+#library(mapdata)
+#library(broom)  # Convert models to data frames
+#library(rdrobust)  # For robust nonparametric regression discontinuity
+#library(estimatr)  # Run 2SLS models in one step with iv_robust()
+#library(ivreg)
+#library(ivmodel)
+#library(gtools)
+
+# network
+library(sna)
+library(igraph)
+library(threejs)
+library(ggplot2)
+library(ggraph)
+library(ggrepel)
+library(intergraph)
+library(tidygraph)
+library(xUCINET)
+
+#source("../viridis.R")
+```
+
+## [SNA LINKS 2023] 
+
+#### Author: Eric Hsienchen Chu
+
+#### Date: June 7, 2022
+
+
+- - -
+
+#### TA: Francisco Trincado-Munoz
+
+#### SCRIPT Day4-1 Two-Mode - [Intermediate SNA with R (LINKS Workshop 2023](https://www.linksworkshop.org/intermediate-sna-r))
+
+- - -
+
+#### I. Preparing the data
+
+```{r}
+# From the class
+# Network of 6 scientists and 8 publications
+
+MATRIX68 = matrix(c(1,0,0,0,0,0,0,0,
+                     +                    1,0,0,1,0,0,0,0,
+                     +                    1,1,0,0,0,0,0,0,
+                     +                    1,1,1,0,0,0,0,0,
+                     +                    0,0,1,1,1,1,1,1,
+                     +                    0,0,0,0,0,0,1,1),
+                     +                    6,8,byrow = TRUE)
+rownames(MATRIX68) = c("a1","a2","a3","a4","a5","a6")
+colnames(MATRIX68) = c("e1","e2","e3","e4","e5","e6","e7","e8")
+```
+
+
+```{r}
+# Plotting
+gplot(MATRIX68, displaylabels=TRUE, usearrows=FALSE, gmode="twomode")
+
+# Row sums (degree of actors?)
+rowSums(MATRIX68)
+
+# Col Sums (degree of events?)
+colSums(MATRIX68)
+
+# Proportion for actors
+rowSums(MATRIX68)/NCOL(MATRIX68)
+
+# Proportion for events
+colSums(MATRIX68)/NROW(MATRIX68)
+```
+
+
+```{r}
+# Total Contribution 
+t(t(MATRIX68)/colSums(MATRIX68))
+
+rowSums(t(t(MATRIX68)/colSums(MATRIX68)))
+
+# Average Contribution
+rowSums(t(t(MATRIX68)/colSums(MATRIX68)))/(rowSums(MATRIX68))
+```
+
+- - - 
+
+#### II. One-mode Projections
+
+
+```{r}
+# Projections
+(Actors_Projection = MATRIX68 %*% t(MATRIX68)) # A*(A^T)
+# You can read this as papers that actors collaborate
+# The diagonal is the number of papers by author
+diag(Actors_Projection)
+```
+
+
+```{r}
+(Events_Projection = t(MATRIX68) %*% MATRIX68)
+# Number of common collaborators between papers
+
+# The diagonal represents the total authors by paper
+diag(Events_Projection)
+```
+
+
+> For the analysis, you usually have to ignore the diagonal and set this to zero
+
+```{r}
+diag(Actors_Projection) = 0
+diag(Events_Projection) = 0
+
+par(mar = c(0, 0, 0, 0))
+gplot(Actors_Projection, displaylabels=TRUE,
+      usearrows=FALSE, edge.lwd=1)
+
+par(mar = c(0, 0, 0, 0))
+gplot(Events_Projection, displaylabels=TRUE,
+      usearrows=FALSE, edge.lwd=1)
+```
+
+- - - 
+
+#### Two-mode Network
+
+
+```{r} 
+# require packages
+#library(xUCINET)
+#library(sna)
+#library(igraph)
+```
+
+
+```{r}
+# Two-mode Network (what are they?), why?
+
+# Let's have a look at one of the most popular two-mode dataset
+# Southern women attendance to events
+Davis_SouthernWomen
+
+# The ties represent attendance at 14 social events by 18 Southern women
+
+#Check the matrix only
+Davis_SouthernWomen$Attendance
+```
+
+#### STEP 1 - Plotting 
+
+```{r}
+
+# (because plotting always help to understand the network)
+
+# Plotting with igraph
+
+BN_SW_IG = graph_from_incidence_matrix(Davis_SouthernWomen$Attendance)
+
+#Check the network
+
+BN_SW_IG
+
+#Check the type: FALSE (women) & TRUE (events)
+
+table(V(BN_SW_IG)$type)
+
+# We set some attributes for visualization
+# Women are blue squares, events nodes are orange circles:
+
+V(BN_SW_IG)$color = c("steel blue", "orange")[V(BN_SW_IG)$type + 1] #We add 1 cuz the type is 1 or 0 (TRUE or FALSE)  
+V(BN_SW_IG)$shape = c("square", "circle")[V(BN_SW_IG)$type + 1]
+
+#For the labels 
+V(BN_SW_IG)$label <-c(substr(rownames(Davis_SouthernWomen$Attendance),1,2),colnames(Davis_SouthernWomen$Attendance))
+
+# Igraph has a special layout for bi-partite networks, let's try it
+```
+
+
+```{r}
+#w/o labels
+plot(BN_SW_IG, vertex.label=NA, vertex.size=7, layout=layout_as_bipartite)
+
+# w labels
+par(mar = c(1,1,1,1))
+plot(BN_SW_IG, vertex.size=7, layout=layout_as_bipartite, vertex.label.dist = 1.5,vertex.label.degree = -pi/2)
+```
+
+
+#### STEP 2 -  Analysing the network
+
+In general, there are two options to analyze a bipartite network
+
+- Option 1: Build a projection of the network and analyze each level separately
+
+- Option 2: Analyze the whole network, without distinction
+
+Let's check some things that we could do...
+
+
+> `OPTION 1: Projections`
+
+```{r}
+# Using the xUCINET
+# The xTwoModeToOneMode() function turns the data from two-mode to one-mode network
+
+SW_PROJ_WOMEN <- xTwoModeToOneMode(Davis_SouthernWomen$Attendance)
+SW_PROJ_WOMEN
+
+# The result is a matrix with the co-attendance of the women to the events
+# rows and columns contain the women names
+# The value of the cell i,j represent the co-attendance to events of the woman i & the woman j
+# The diagonal contains the total number of events that each woman attended
+
+SW_PROJ_EVENTS <- xTwoModeToOneMode(t(Davis_SouthernWomen$Attendance))
+SW_PROJ_EVENTS
+
+
+# Plotting these networks
+# We dichotomize at 2, higher than 2 events gets a tie
+
+sna::gplot(SW_PROJ_WOMEN > 2,
+           gmode="graph", 
+           displaylabels = TRUE,         #Labels
+           label.cex=.7,                 #Labels
+           edge.lwd=SW_PROJ_WOMEN*1.5-4, #Edges
+           vertex.cex=.7,                #Vertices
+           vertex.col=7,                 #Vertices
+           edge.col = "grey65")
+```
+
+
+```{r}
+## Projection with normalization
+
+# why do you need to normalize two-mode network?
+
+# To use Bonacich’s normalization method for a one-mode projection, 
+# we add the argument (Measure=“Bonacich”). We also multiply the value by 100.
+
+SW_PROJ_EVENTS_NORM<-xTwoModeToOneMode(t(Davis_SouthernWomen$Attendance),Measure="Bonacich")*100
+
+round(SW_PROJ_EVENTS_NORM)
+
+#Plotting the resulting network
+
+sna::gplot(SW_PROJ_EVENTS_NORM > 50, 
+           gmode="graph", 
+           displaylabels = TRUE,
+           label.cex=.7,
+           label.pos=5,
+           label.col = 4,
+           edge.lwd=(SW_PROJ_EVENTS_NORM>50)*(SW_PROJ_EVENTS_NORM-45)/14,
+           vertex.sides=4,
+           vertex.cex=1.9,
+           vertex.rot=45,
+           vertex.col=3)
+
+#### You can use both projections to analyze centrality
+```
+
+
+```{r}
+#############################################
+# Alternatively
+
+# Co-attendance of women
+WOM_PROJ<- Davis_SouthernWomen$Attendance %*% t(Davis_SouthernWomen$Attendance) 
+WOM_PROJ
+
+# Checking the projection results
+WOM_PROJ==xTwoModeToOneMode(Davis_SouthernWomen$Attendance)
+
+# Co-attendance of events
+EV_PROJ<-t(Davis_SouthernWomen$Attendance) %*% Davis_SouthernWomen$Attendance
+EV_PROJ
+
+##############################################
+```
+
+
+#### III. Two mode to Bipartite network
+
+
+```{r}
+xTwoModeToBipartite(Davis_SouthernWomen$Attendance)
+
+# In this network women and events are in the columns and rows, the blocks in the diagonal contain zeros
+
+DIM1<-dim(Davis_SouthernWomen$Attendance)
+DIM1
+# 18 14  # 18 women and 14 events
+
+#To be able to use different colors and shapes, for the one mode and the second mode, we create a vector with 0 for actors and 1 for events. 
+
+RC1<-c(rep(0, DIM1[1]),rep(1, DIM1[1]))
+
+RC1 #the zero are for the women and ones are for the events
+
+LABELS1<-c(substr(rownames(Davis_SouthernWomen$Attendance),1,2),colnames(Davis_SouthernWomen$Attendance))
+LABELS1
+
+#Now let's draw the network:
+sna::gplot(Davis_SouthernWomen$Attendance, 
+           mode = "fruchtermanreingold", 
+           gmode="twomode", 
+           #Labels
+           displaylabels=TRUE, 
+           label = LABELS1, 
+           label.cex=.7,
+           label.pos=5,
+           #Edges
+           usearrows=FALSE,
+           #Vertices
+           vertex.cex=RC1*.5+1.7, 
+           vertex.rot=45, 
+           vertex.col=RC1*7)
+```
+
+> `OPTION 2: Analyzing the whole network` 
+
+```{r}
+# Option 2.1: use the bipartite network and use classic one-mode analysis
+# Option 2.2: some packages as xUCINET or tnet allow you to analyse two-mode and consider differences
+
+####### (a) Degree Centrality
+
+##### To calculate the degree centrality for the women
+
+xDegreeCentrality(Davis_SouthernWomen$Attendance)
+
+# *The max number of events is 14, the nDegree is the value/max(N_Events)
+
+##### To calculate the degree centrality for the events, we simply transpose the matrix:
+
+xDegreeCentrality(t(Davis_SouthernWomen$Attendance))
+
+
+####### (b) Other centrality measures with xUCINET
+
+# We can use the bipartite network and calculate closeness centrality
+# However, we need to know that the normalization will be incorrect
+
+BIP<-xTwoModeToBipartite(Davis_SouthernWomen$Attendance)
+
+xClosenessCentrality(BIP)
+
+
+####### (c) Global group measures with xUCINET
+
+# xDensity() function can take a two-mode network as input
+
+xDensity(Davis_SouthernWomen$Attendance)
+
+
+BC<-xBiCliques(Davis_SouthernWomen$Attendance)
+BC
+
+BC%*%t(BC)   # is simple one-mode projection
+
+
+xHierarchicalClustering(BC%*%t(BC), Input="Similarities", Method="average")
+```
+
+
+```{r}
+############ Alternatively you can use igraph ##################
+
+##### we will carry on with the same data for better understanding 
+
+# we previously built an igraph object of the Davis Suthern women dataset
+BN_SW_IG <- graph_from_incidence_matrix(Davis_SouthernWomen$Attendance)
+BN_SW_IG
+```
+
+> `Option 2.1 - do it as normal`
+
+```{r}
+types <- V(BN_SW_IG)$type  ## getting each vertex "type" helps to order things
+deg <- igraph::degree(BN_SW_IG)
+bet <- igraph::betweenness(BN_SW_IG)
+clos <- igraph::closeness(BN_SW_IG)
+eig <- eigen_centrality(BN_SW_IG)$vector
+
+cent_df_NOCHANGE <- data.frame(types, deg, bet, clos, eig)
+
+cent_df_NOCHANGE<-cent_df_NOCHANGE[order(cent_df_NOCHANGE$type, decreasing = TRUE),] ## sort w/ `order` by `type`
+#View(cent_df_NOCHANGE)
+```
+
+> `Option 2.2 - analyze each mode separately`
+
+Tore Opsahl has a website about the analysis of bipartite networks and he developed the package tnet with some alternatives [https://toreopsahl.com/](https://toreopsahl.com/)
+
+```{r}
+install.packages("tnet", dependencies=TRUE)
+library(tnet)  # start tnet
+
+#tnet requires an edgelist object without names (only numbers) so we need to transform the igraph object
+
+WoEv<-get.edgelist(BN_SW_IG, names=FALSE)
+
+# In this case the women are in the 1st column and the events in the 2nd
+head(WoEv)
+
+# To get the events first we just alter the order of the columns
+EvWo <- WoEv[, c(2, 1)]
+head(EvWo) 
+
+# Why this is important? Because the degree function is only calculated for the data in the 1st column
+
+deg_WoEv <- degree_tm(WoEv)
+deg_WoEv
+
+deg_EvWo <- degree_tm(EvWo)
+deg_EvWo
+
+# Up to now, tnet only has the degree function to analyze bi-partite data
+# However, Tore recommends to use the weighted projections to analyze the data
+
+# We previously built the projections
+
+EV_PROJ
+
+# We set the diagonal to zero (to avoid self loops)
+diag(EV_PROJ) <- 0
+
+# Using as.tnet() function we get a numerical edgelist 
+EV_PROJ_TN <- as.tnet(EV_PROJ)
+
+# Warning message:
+#   In as.tnet(SW_PROJ_EVENTS_NORM) :
+#   Data assumed to be weighted one-mode tnet (if this is not correct, specify type)
+# This is just a warning 
+
+head(EV_PROJ_TN)
+# sender(i) receiver(j) weight
+
+Events_Wdeg <- degree_w(EV_PROJ_TN)
+Events_Wbet <- betweenness_w(EV_PROJ_TN)
+Events_Wclos <- closeness_w(EV_PROJ_TN, gconly=FALSE)
+
+# Note: tnet does not include eigenvector centrality
+
+Events_W_cent_df <- data.frame(Events_Wdeg, Events_Wbet, Events_Wclos)
+
+Events_W_cent_df
+```
+
+
+```{r}
+##### we could do the same for the women projection
+
+# We previously built the projections
+
+WOM_PROJ
+
+# We set the diagonal to zero (to avoid self loops)
+diag(WOM_PROJ) <- 0
+
+# Using as.tnet() function we get a numerical edgelist 
+WOM_PROJ_TN <- as.tnet(WOM_PROJ)
+
+# Warning message:
+#   In as.tnet(SW_PROJ_EVENTS_NORM) :
+#   Data assumed to be weighted one-mode tnet (if this is not correct, specify type)
+# This is just a warning 
+
+head(WOM_PROJ_TN)
+# sender(i) receiver(j) weight
+
+Women_Wdeg <- degree_w(WOM_PROJ_TN)
+Women_Wbet <- betweenness_w(WOM_PROJ_TN)
+Women_Wclos <- closeness_w(WOM_PROJ_TN, gconly=FALSE)
+
+# Note: tnet does not include eigenvector centrality
+
+Women_W_cent_df <- data.frame(Women_Wdeg, Women_Wbet, Women_Wclos)
+rownames(Women_W_cent_df)<-rownames(Davis_SouthernWomen$Attendance)
+Women_W_cent_df
+```
+
+
+
+
+
+

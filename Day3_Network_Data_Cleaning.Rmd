@@ -1,0 +1,690 @@
+---
+author: "Eric Hsienchen Chu"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE, fig.align="center", fig.height = 5, fig.width = 8)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+
+#library(plm)       # Panel data analysis library
+#library(car)       # Companion to applied regression 
+#library(tseries)   # For timeseries analysis
+#library(lmtest)    # For hetoroskedasticity analysis
+#library(directlabels)
+#library(ggrepel)
+#library(ggtext)
+#library(gganimate)
+#library(gifski)
+#library(kableExtra)
+#library(ggpubr)
+#library(rddtools)
+#library(magrittr)
+#library(maps)
+#library(mapdata)
+#library(broom)  # Convert models to data frames
+#library(rdrobust)  # For robust nonparametric regression discontinuity
+#library(estimatr)  # Run 2SLS models in one step with iv_robust()
+#library(ivreg)
+#library(ivmodel)
+#library(gtools)
+
+# network
+library(sna)
+library(igraph)
+library(threejs)
+library(ggplot2)
+library(ggraph)
+library(ggrepel)
+library(intergraph)
+library(tidygraph)
+
+#source("../viridis.R")
+```
+
+## [SNA LINKS 2023] 
+
+#### Author: Eric Hsienchen Chu
+
+#### Date: June 7, 2022
+
+
+- - -
+
+#### TA: Francisco Trincado-Munoz
+
+#### SCRIPT Day3 - [Intermediate SNA with R (LINKS Workshop 2023](https://www.linksworkshop.org/intermediate-sna-r))
+
+- - -
+
+#### Case 1: Dataset is an edgelist 
+
+```{r}
+#Step 1 - Prepare your data
+
+#The first dataset we “Dataset1-Media-Example-NODES.csv” and “Dataset1-Media-Example-EDGES.csv”
+
+nodes = read.csv("Dataset1-Media-Example-NODES.csv", header = T, as.is = T)
+links = read.csv("Dataset1-Media-Example-EDGES.csv", header = T, as.is = T)
+```
+
+
+```{r}
+# To examine the data 
+# use head or tail function
+head(nodes)
+head(links)
+
+tail(nodes)
+tail(links)
+# If you have a bigger sample, you can specify the number of lines you want to see, default is 5
+head(nodes, n = 7)
+```
+
+To convert the data into igraph object us the graph_from_data_frame() function. This function requires two sets of data:
+
+(1) d: the edges of the network, it recognizes the two first columns as the IDs (source & target). 
+
+  - The following columns are considered edge attributes (e.g., weight, type, etc.)
+  
+(2) vertices: The first column needs to be the nodes ID. All the following columns are nodes attributes. 
+
+  - Nodes ID need to match with the IDs in the edgelist
+  
+(3) directed: you needs to specify "T" o "1" for directed or "F" or "0" for undirected
+
+
+```{r}
+# Step 2 - Get your data into igraph format 
+#library(igraph)
+
+net = graph_from_data_frame(d = links, vertices = nodes, directed = T)
+net
+```
+
+
+The igraph object includes the following descriptions
+
+> e.g. IGRAPH 3cbdde0 DNW- 17 49 --
+
+(1) D or U, for directed or undirected graph
+
+(2) N for named graph (where nodes have a name)
+
+(3) W for a weighted graph (where edges have a "weight" attribute)
+
+(4) B for a bipartite or two-mode network (where nodes have a "type" attribute)
+
+The numbers represent the number of nodes & edges in the graph
+
+The extra columns in the edgelist or NodesID files are considered attributes
+
+- (g/c): graph-level character attribute
+
+- (v/c): vertex level character attribute
+
+- (e/n): edge-level numeric attribute
+
+
+```{r}
+# To access the nodes, edges or attributes you have to use the following codes
+E(net)        #gives you the EDGES of the network
+V(net)        #gives you the VTICES of the network
+E(net)$type   #gives you the edge attribute "type"
+V(net)$media  #gives you the node attribute "media"
+
+E(net)$newVariable = ifelse(E(net)$type == "mention", 1, 0)
+
+#Using this commands you can filter or request specific nodes or edges
+#e.g.
+V(net)[media == "BBC"]
+E(net)[type == "mention"]
+
+
+# To do the opposite procedure and get an edgelist from the igraph object
+# use as_edgelist() function
+as_edgelist(net, names = T)
+matrix = as_adjacency_matrix(net, attr = "weight")
+
+#class(as.array(matrix))
+#write.csv(as.array(matrix), "matrix.csv")
+
+
+as_data_frame(net, what = "edges")
+as_data_frame(net, what = "vertices")
+
+#################
+```
+
+- - -
+
+#### Case 2: Dataset is an matrix
+
+```{r}
+##### Case 2.1 - You have the data ready
+
+#Step 1 - Prepare your data
+
+#The second dataset are “Dataset2-Media-Example-NODES.csv” and “Dataset2-Media-Example-EDGES.csv”
+nodes2 = read.csv("Dataset2-Media-User-Example-NODES.csv", header = T, as.is = T)
+links2 = read.csv("Dataset2-Media-User-Example-EDGES.csv", header = T, row.names = 1)
+
+#Examine the data
+head(nodes2)
+head(links2)
+
+#This matrix is a two-mode network
+typeof(links2)
+
+links2 = as.matrix(links2)
+
+typeof(links2)
+
+dim(links2)
+dim(nodes2)
+```
+
+
+To read the matrix as an igraph object use the graph_from_incidence_matrix() function. To get a two mode network to work in igraph you need to set an attribute called "type" where type is "FALSE" or "0" for vertices in one mode and "TRUE" or "1" for vertices in the other mode.
+
+
+```{r}
+net2 = graph_from_incidence_matrix(links2)
+net2
+table(V(net2)$type)
+```
+
+
+
+```{r}
+##### Case 2.2 - You have to put your data together
+
+links3 = as.matrix(read.csv("BBT1_NN.csv", header = F))
+links3
+
+#write.csv(links2, "test.csv")
+
+#To create a file with attributes
+
+nodes3 = as.data.frame(LETTERS[1:nrow(links3)]) 
+
+#nrow() gives you the number of rows
+#ncol() gives you the number of columns
+#alternatively you can use dim(links3)[1] for the rows 
+# or dim(links3)[2] for the columns
+
+# To change a column name use the names() function
+names(nodes3) = "names"
+
+#you can specify the specific column indicating the order
+names(nodes3)[1] = "names"
+
+#We can replaces the names for others
+nodes3$names = c("Sheldon","Penny","Leonard","Raj","Howard","Bernadette","Amy","Stuart")
+
+colnames(links3) = nodes3$names
+rownames(links3) = nodes3$names
+links3
+
+net3 = graph_from_adjacency_matrix(links3, mode = "directed", weighted = TRUE)
+net3
+plot(net3)
+
+# What if now I have attributes
+atts3 = read.csv("BBT1_ATTs.csv", header = TRUE)
+
+# Four new variables
+# (1) PhD : if the character has a PhD
+# (2) Physics : if the character is in the Physics field
+# (3) Gender :  MALE or FEMALE
+# (4) Episodes : Number of Episodes the character appears in the series
+
+# Remember if you want to add these variables to an existing data.frame you can use cbind() function
+nodes3 = cbind(nodes3, atts3)
+
+#Let's check 
+nodes3$Gender
+#How many Males and Females
+table(nodes3$Gender)
+
+#Average of episodes
+mean(nodes3$Episodes,na.rm = T) #na.rm=T in case that you have NAs
+round(mean(nodes3$Episodes,na.rm = T), 0)
+
+#Let's put these variables in a igraph object
+V(net3)$Gender = nodes3$Gender
+V(net3)$PhD = nodes3$PhD
+V(net3)$Physics = nodes3$Physics
+V(net3)$Episodes = nodes3$Episodes
+
+E(net3)$var = 1
+
+#Check net3 again
+net3
+```
+
+
+```{r}
+##############################################
+#Alternatively you set everything from the beginning
+
+links3_Edgelist = as_edgelist(net3,names = T)
+ 
+net3.1 = graph_from_data_frame(links3_Edgelist, directed = TRUE, vertices = nodes3)
+net3.1
+plot(net3.1)
+
+##############################################
+```
+
+
+
+```{r}
+# what if I want to create variables or assign values, some examples:
+
+#(1) New variable for PhD in Physics
+V(net3)$PhD_in_Physics =V(net3)$PhD*V(net3)$Physics
+
+#(2) We want to know who was part of Season 3  #S1:17 eps #S2:23 eps #S3:23 eps
+# ifelse() function ifelse(condition, TRUE,FALSE)
+V(net3)$Season3 = ifelse(V(net3)$Episodes > 63, 1,0)
+
+# color
+color = c("orange","skyblue")
+
+plot(net3,
+     vertex.color = color[V(net3)$PhD_in_Physics+1], edge.arrow.size = .4)
+     
+
+V(net3)$size = ((V(net3)$Episodes/100)^3)+5
+
+plot(net3,
+     vertex.color = color[V(net3)$PhD_in_Physics+1], edge.arrow.size = .4)
+```
+
+
+#### What if I want to subset an ego network or data with $x$ characteristics
+
+
+```{r}
+#(1) induced_subgraph() function
+
+net3.2 = induced_subgraph(net3,V(net3)$Season3 == 1, impl = "copy_and_delete")
+net3.2
+
+net3.2.1 = induced_subgraph(net3,V(net3)$name %in% c("Raj", "Sheldon", "Penny", "Howard"), impl = "copy_and_delete")
+
+plot(net3.2, edge.arrow.size = .4)
+plot(net3.2.1, edge.arrow.size = .4) 
+
+#(2) delete.edges or delete.vertices
+net3.3 = delete.vertices(net3,V(net3)$Gender == "Female")
+net3.3
+plot(net3.3, edge.arrow.size = 0.4)
+
+
+#(3) neighbours
+Ego_Sheldon = igraph::neighbors(net3, V(net3)["Sheldon"], mode="all")
+Ego_Sheldon
+plot(Ego_Sheldon)
+
+Ego_Sheldon = V(net3)["Sheldon", .nei("Sheldon")] %>% 
+  induced_subgraph(graph = net3) 
+Ego_Sheldon
+
+plot(Ego_Sheldon)
+```
+
+#### Changing from igraph to sna
+
+
+```{r}
+# igraph to network object
+
+#install.packages('Intergraph')
+library(intergraph)
+
+# Check the network object
+net3
+class(net3)
+
+#Two main functions asNetwork & asIgraph
+
+
+net3_Network = asNetwork(net3)
+class(net3_Network)
+
+net3_Network
+
+# Density
+sna::gden(net3_Network)
+# Reciprocity
+
+sna::grecip(net3_Network,
+            measure = c("edgewise"))
+
+# Why the value is 1?
+
+# Transitivity
+sna::gtrans(net3_Network)
+
+# =y to be used with the ergm package
+#check more here: https://cran.r-project.org/web/packages/intergraph/vignettes/howto.html
+
+# The other way around
+
+net3_Igraph = asIgraph(net3_Network)
+class(net3_Igraph)
+
+net3_Igraph
+
+V(net3_Igraph)$name = V(net3_Igraph)$vertex.names
+net3_Igraph
+```
+
+
+#### Other useful tools for data management 
+
+```{r}
+# We will work with the data of Game of Thrones Season 3 (collected by Andre Beveridge of Macalester University). This is based on Season 3.
+# 123 characters and 500 edges based on co-ocurrences 
+
+GoT_Nodes = read.delim("GOT_Nodes.csv",sep = ",")
+GoT_Edges = read.csv("GOT_Edges.csv",header = T)
+
+head(GoT_Nodes)
+head(GoT_Edges)
+
+library(dplyr)
+library(stringr)
+
+# dplyr package is a really good ally to prepare data
+# dplyr only works with data frames so you can use as.matrix() & as.data.frame() to convert them
+
+# (1) Text operations 
+# Using the stringr package you can use some text cleaning, always necessary
+# the function mutate from dplyr changes values of columns or add new columns
+
+GoT_Nodes_1 = GoT_Nodes %>%
+    mutate_if(is.character,str_trim) %>% #to delete extra spaces before and after #str_squish() delete extra spaces between words
+    mutate(name = str_to_title(name)) %>% # to set as capital only the first letter
+    mutate(name = str_replace_all(name," ","_")) %>% #str_replace_all() replaces all the characters in the condition
+    mutate(house = str_to_title(house))  #str_to_upper() & #str_to_lower
+
+#(2) Selecting variables ]
+
+GoT_Nodes_1 = GoT_Nodes_1 %>%
+    select(name,house) #select() changes whether a column is selected or not
+
+#(3) Filter rown based on values
+GoT_Nodes_2 = GoT_Nodes_1 %>%
+    filter((house != "Other"))
+
+GoT_Nodes_2
+```
+
+
+```{r}
+# When numeric, you can use == for equal or != for different
+# or you can use %in% when is a character
+# to filter many characters you can use  %in% c("Filter1","Filter2",etc...)
+
+#Other useful dplyr functions
+#rename() changes the names of columns
+#relocate() changes the order of the columns
+#summarise() collapses date to a group value
+
+GoT_House = GoT_Nodes_2 %>%
+  group_by(house) %>%
+  summarise(n = length(house)) 
+
+GoT_House
+
+# Now before we carry on, let's do the same for the edges 
+names(GoT_Edges)[1]="source" #Change the name of the first column
+
+GoT_Edges_1 = GoT_Edges %>%
+  mutate_if(is.character,str_trim) %>% #to delete extra spaces before and after #str_squish() delete extra spaces between words
+  mutate(source = str_to_title(source)) %>% 
+  mutate(source = str_replace_all(source," ","_")) %>%
+  mutate(target = str_to_title(target)) %>% 
+  mutate(target = str_replace_all(target," ","_"))
+  
+#(4) what if I only want the characters that have a house
+
+GoT_Edges_2 = GoT_Edges_1 %>%
+  filter(source %in% unique(GoT_Nodes_2$name)) %>%
+  filter(target %in% unique(GoT_Nodes_2$name))
+
+
+#Ready! Let's plot both networks with all the characters and only with those in a house
+
+# A. All the characters
+
+GoT_n_1=graph_from_data_frame(GoT_Edges_1, directed = TRUE, vertices = GoT_Nodes_1)
+GoT_n_1
+plot(GoT_n_1, edge.arrow.size = .4)
+
+
+# B. Only characters with a house
+
+GoT_n_2=graph_from_data_frame(GoT_Edges_2, directed = TRUE, vertices = GoT_Nodes_2)
+GoT_n_2
+plot(GoT_n_2,edge.arrow.size = .4)
+
+#Let's color the houses
+#install.packages('RColorBrewer')
+library(RColorBrewer)
+
+display.brewer.all()
+
+display.brewer.pal(8, "Set3")
+
+HouseColor =brewer.pal(nrow(GoT_House), "Set3")
+
+#To match color and house we will do a trick
+#Create a variable in the group dataset with the order for each house
+GoT_House$Order =1:nrow(GoT_House)
+
+#Now I will create a loop
+for(i in 1:47)
+{
+  V(GoT_n_2)$Color[i] = HouseColor[GoT_House[GoT_House$house == V(GoT_n_2)$house[i],"Order"][[1]]]
+}
+
+V(GoT_n_2)$Color
+
+plot(GoT_n_2,edge.arrow.size = .4, vertex.color = V(GoT_n_2)$Color,vertex.size = 10,vertex.label.cex = 0.8)
+
+legend(x=-1.5, y=-0.5, GoT_House$house, pch=21,
+       col="#777777", pt.bg=HouseColor, pt.cex=2, cex=.8, bty="n", ncol=1)
+```
+
+- - - 
+
+#### Visualization
+
+```{r}
+# ggplot is an alternative with better visualization tools
+library(ggplot2)
+library(ggraph)
+library(ggrepel)
+
+ggraph(GoT_n_2) + 
+  geom_edge_link() + 
+  geom_node_point(aes(color = factor(house)))
+
+# Because we do not specify layout, it uses the default: "auto"
+
+# we will pick a specific layout: Kamada-Kawai layout algorithm
+ggraph(GoT_n_2, layout = 'kk') +   #maxiter = 200
+  geom_edge_link() + 
+  geom_node_point(aes(color = factor(house)))
+
+# You can also create a layout
+#layout = create_layout(graph, layout = 'drl')
+
+E(GoT_n_2)$Close = ifelse(E(GoT_n_2)$Weight > mean(E(GoT_n_2)$Weight,na.rm = T),"Close","Distance")
+GoT_n_2
+
+# If we want to create a circular plot
+
+ggraph(GoT_n_2, layout = 'linear') + 
+  geom_edge_arc(aes(colour = factor(Close)))+
+  geom_node_point(aes(color = factor(house)))
+
+ggraph(GoT_n_2, layout = 'linear', circular = T) + 
+  geom_edge_arc(aes(colour = factor(Close)))+
+  geom_node_point(aes(color = factor(house)))
+
+# Change layout to Fruchterman-Reingold layout algorithm
+
+ggraph(GoT_n_2,layout = "fr") + 
+  geom_edge_link(aes(colour = factor(Close))) + 
+  geom_node_point(aes(color = factor(house))) +
+  theme_graph()
+
+# Add labels to nodes
+ggraph(GoT_n_2,layout = "fr") + 
+  geom_edge_link(aes(colour = factor(Close))) + 
+  geom_node_point(aes(color = factor(house))) +
+  theme_graph()+
+  geom_node_text(aes(label = name), repel=TRUE)
+
+# Add a different shape
+ggraph(GoT_n_2,layout = "fr") + 
+  geom_edge_link(aes(colour = factor(Close))) + 
+  geom_node_point(aes(color = factor(house), shape = factor(house))) +
+  theme_graph()+
+  geom_node_text(aes(label = name), repel=TRUE)
+
+# If I want the size and transparency of the node to depend on the degree
+ggraph(GoT_n_2,layout = "fr") + 
+  geom_edge_link(aes(colour = factor(Close))) + 
+  geom_node_point(aes(color = factor(house),size = degree(GoT_n_2), alpha = degree(GoT_n_2))) +
+  theme_graph()+
+  geom_node_text(aes(label = name), repel=TRUE)
+
+# You can also facet the plots depending on the ties
+ggraph(GoT_n_2,layout = "fr") + 
+  geom_edge_link(aes(colour = factor(Close))) + 
+  geom_node_point(aes(color = factor(house))) +
+  theme_graph()+
+  geom_node_text(aes(label = name), repel=TRUE) +
+  facet_edges(~Close) +
+  labs(color="House", edge_colour = "Relationship")
+  
+
+# Let's add more attributes
+
+Got_Plot1 = ggraph(GoT_n_2, "fr")+
+  geom_edge_link(aes(edge_width = Weight),alpha = 0.7)+ # filter = (house == "Stark")
+  geom_node_point(aes(color = factor(house),size = degree(GoT_n_2)), shape = 16)+
+  geom_node_text(aes(label = name, size = 5),repel=TRUE)+
+  scale_edge_width(range = c(0.1,3))+
+  labs(color="House", size="Appearance", edge_width = "Co-appearance")+
+  theme_graph() #legend.position = "none" if you do not want legend
+
+#warnings()
+
+
+Got_Plot1
+
+
+ggsave(Got_Plot1, filename = "Got_Plot1.pdf", device = cairo_pdf,
+       width = 30, height = 25, units = "cm", dpi=300)
+
+ggsave(Got_Plot1, filename = "Got_Plot1.png",
+       width = 30, height = 25, units = "cm", dpi=300)
+
+
+# ggraph/ggplot2 can be integrated to dplyr
+
+
+GoT_House = GoT_Nodes_2 %>%
+  group_by(house) %>%
+  summarise(n = length(house)) 
+
+GoT_House
+```
+
+
+```{r}
+#install.packages('tidygraph')
+library(tidygraph)
+
+# First you need to create a table, use as_tbl_graph():
+
+GoT_n_2_Table = as_tbl_graph(GoT_n_2)
+GoT_n_2_Table
+
+# To change nodes or attributes we have to use activate(nodes) or activate(edges)
+GoT_n_2_Table %>%
+  activate(nodes) %>%
+  mutate(degree = centrality_degree())
+
+
+# We can use other ggplot graphs
+GoT_n_2_Table %>%
+  activate(nodes) %>%
+  mutate(cl = centrality_closeness()) %>%
+  as_tibble() %>%
+  ggplot() +
+  geom_histogram(aes(x=cl), bins = 30) +
+  theme_bw()
+
+#?centrality_closeness
+```
+
+
+
+```{r}
+# We can check the data as table:
+GoT_n_2_Table %>%
+  activate(nodes) %>%
+  mutate(cl = centrality_closeness()) %>%
+  as_tibble() %>%
+  select(name,cl) %>%
+  arrange(desc(cl))
+
+
+GoT_n_2_Table %>%
+  activate(edges) %>% # You can also activate nodes
+  filter(Close == "Close") %>%
+  ggraph(layout = "fr") + 
+  geom_edge_link() + 
+  geom_node_point(aes(color = factor(house))) +
+  geom_node_text(aes(label = name), repel=TRUE) +
+  theme_graph()
+```
+
+
+
+```{r}
+# To read spss files
+
+#library(foreign)
+
+#SPSS_Data= read.spss(file ="FileName.sav", to.data.frame= TRUE, reencode = TRUE)
+```
+
+
+
+```{r}
+data(GoT_n_2)
+graphjs(GoT_n_2, bg="black", vertex.size = 0.5)
+
+data(GoT_n_1)
+graphjs(GoT_n_1, bg="black", vertex.size = 0.5)
+
+```
+
+

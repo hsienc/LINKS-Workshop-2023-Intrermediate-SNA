@@ -1,0 +1,427 @@
+---
+author: "Eric Hsienchen Chu"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE, fig.align="center", fig.height = 5, fig.width = 8)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+#library(plm)       # Panel data analysis library
+#library(car)       # Companion to applied regression 
+#library(tseries)   # For timeseries analysis
+#library(lmtest)    # For hetoroskedasticity analysis
+#library(directlabels)
+#library(ggrepel)
+#library(ggtext)
+#library(gganimate)
+#library(gifski)
+#library(kableExtra)
+#library(ggpubr)
+#library(rddtools)
+#library(magrittr)
+#library(maps)
+#library(mapdata)
+#library(broom)  # Convert models to data frames
+#library(rdrobust)  # For robust nonparametric regression discontinuity
+#library(estimatr)  # Run 2SLS models in one step with iv_robust()
+#library(ivreg)
+#library(ivmodel)
+#library(gtools)
+
+library(sna)
+library(igraph)
+library(threejs)
+
+
+#source("../viridis.R")
+```
+
+
+## [SNA LINKS 2023] 
+
+#### Author: Eric Hsienchen Chu
+
+#### Date: June 5, 2022
+
+
+- - -
+
+#### Instructor: Filip Agneessens
+
+#### SCRIPT Day1 - [Intermediate SNA with R (LINKS Workshop 2023](https://www.linksworkshop.org/intermediate-sna-r))
+
+- - -
+
+#### I. Basic Operation
+
+- - -
+
+```{r}
+# Create & assign a single value
+objectA = 3.1
+objectB = "Male"
+
+objectA
+objectB
+```
+
+
+
+```{r}
+# Create a vector: c()
+objectC = c(3,4,1,1,2)
+objectC
+
+objectC[[2]]
+```
+
+```{r}
+# QUESTIONS:
+#-> 1. What does objectC[c(2,4)] do?
+ objectC[c(2,4)]
+# Return 2nd and 4th element in objectC
+
+#-> 2. What about objectC[c(2:4)]?
+ objectC[c(2:4)]
+# Return "from the 2nd to 4th" element in objectC
+
+#-> 3. What about objectC[-2]?
+ objectC[-2]
+# Return objectC WITHOUT the 2nd (the "minus")
+
+#-> 4. What happens if you create a vector c("Apple",2,NA,5.3)?
+ objectD = c("Apple",2,NA,5.3)
+ objectD
+ class(objectD) # a vector of characters (why? all need to be in the same type) 
+ class(objectD[3]) 
+```
+
+
+```{r}
+# a matrix
+objectM = matrix( c(1,2,3,4,5,6,7,8,9), nrow = 3, ncol = 3, byrow = T)
+objectM
+```
+
+
+```{r}
+# QUESTIONS:
+#-> 5. Why byrow=TRUE ?
+ objectM_col = matrix(c(1,2,3,4,5,6,7,8,9),3,3)
+ objectM_col
+ # default: byrow = F -> first fill in column
+```
+
+
+```{r}
+rownames(objectM) = c("a","b","c")
+colnames(objectM) = c("a","b","c")
+objectM
+```
+
+
+```{r}
+# QUESTIONS:
+#-> 6. What does objectM[2:3,] do?
+objectM[2:3,] #Get Row 2 and Row 3 with all cols (row index)
+
+#-> 7. What does objectM[c("b","c"),] do?
+objectM[c("b","c"),] #Get Row b and Row c with all cols (name index)
+
+#-> 8. What does objectM[-1,-1] do?
+objectM[-1,-1] #Get matrix WITHOUT Row 1 & Col 1
+```
+
+
+```{r}
+# a list
+objectL = list(objectA, objectC, objectM)
+objectL
+
+# Notice the difference
+objectL[2]
+objectL[[2]]
+```
+
+
+```{r}
+# QUESTIONS:
+#-> 9. What about objectL[[-2]]?
+ objectL[[-2]] # invalid index
+
+#-> 10. What about objectL[[2]][3]?
+ objectL[[2]][3] # 3rd element in the 2nd stuff of objectL -> objectC[2]
+ objectC[3]
+
+
+#-> 11. What about objectL[[3]][3,-1]?
+ objectL[[3]][3,-1] # last element of the 3rd row of objectM
+
+#-> 12. Add: names(objectL) = c("A","C","M")
+# What does objectL$C give?
+ names(objectL) = c("A","C","M")
+ objectL$C
+```
+
+
+```{r}
+# Create a data.frame
+Age5 = c(22,35,21,34,22)
+Gender5 = c("Female","Female","Male","Male","Female")
+
+objectX = data.frame(Age5, Gender5)
+objectX
+objectX$Gender5
+objectX[[1]]
+objectX[ ,1] # all rows for first col
+objectX[3,1] # third row & first col
+```
+
+
+```{r}
+# QUESTIONS:
+#-> 13. What would you get: objectX$Gender[2]?
+# objectX$Gender[2]
+```
+
+
+- - -
+
+#### II. Importing Network Data 
+
+- - -
+
+
+```{r}
+# Reading in a csv file
+# First set your working directory (i.e., where your files are)
+# Alternatively go to: Session > Set Working Directory > Choose Directory
+setwd("/Users/hsien-chenchu/Desktop/SNA-LINKS2023")
+```
+
+
+When importing data in R it is important to ensure that data is stored in an easily accessible and clear way, especially if you want to share the information with others. For a single project, we often will deal with multiple network data sets and nodal attributes. We even might deal with multiple modes, such as people and events. One approach is to store all data from a project into a single 'list' object:
+
+
+```{r}
+# Let's do this for Krackhardt's HighTech managers:
+# We first create an empty list object:
+Krackhardt_HighTech = list()
+
+# Now we read in the data and add different elements to it:
+Krackhardt_HighTech$Advice = as.matrix(
+  read.csv("Krackhardt_HighTech_Advice.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+```
+
+
+#### Data Structure
+- `Krackhardt_HighTech` is a list
+
+  - `Advice`, in matrix form, is an element of the list `Krackhardt_HighTech`
+  
+  - `Friendship`, in matrix form, is an element of the list `Krackhardt_HighTech`
+  
+  - `ReportTo`, in matrix form, is an element of the list `Krackhardt_HighTech`
+  
+  - `Attrobutes` is an element of the list `Krackhardt_HighTech`
+
+
+```{r}
+Krackhardt_HighTech$Advice
+table(Krackhardt_HighTech$Advice)
+
+# We get this:
+#   0   1 
+# 251 190
+```
+
+
+```{r}
+#read in more data
+Krackhardt_HighTech$Friendship = as.matrix(
+  read.csv("Krackhardt_HighTech_Friendship.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+
+Krackhardt_HighTech$ReportTo = as.matrix(
+  read.csv("Krackhardt_HighTech_ReportTo.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+
+Krackhardt_HighTech$Attributes = read.csv(
+  "Krackhardt_HighTech_Attributes.csv", 
+  stringsAsFactors=FALSE, row.names=1
+  )
+```
+
+#### Note
+
+Why specifying `stringsAsFactors=FALSE`? R has, at least by default, converted (character) strings to factors when creating data frames directly with `data.frame()`.
+
+
+```{r}
+#### some outputs
+Krackhardt_HighTech$Attributes
+
+table(Krackhardt_HighTech$Attributes$Level)
+
+Krackhardt_HighTech
+```
+
+- - - 
+
+#### III.  Network Visualization
+
+
+```{r}
+# Installing and "activate" packages
+#install.packages("igraph")
+#install.packages("sna")
+library(igraph)
+library(sna)
+```
+
+$$ \text{matrix } A \cdot A^T \text{ symmetry}$$ 
+
+
+
+```{r}
+# Symmetrizing the Friendship network
+Krackhardt_HighTech$Friendship_SymMin = (Krackhardt_HighTech$Friendship)*t(Krackhardt_HighTech$Friendship) #t: Matrix Transpose
+
+# 1. Plotting using the "sna" package
+gplot(Krackhardt_HighTech$Friendship_SymMin, mode = "circle")
+# If you get the warning "Error in plot.new() : figure margins too large"
+# -> Increase the size of your "Plots" window in RStudio
+```
+
+
+```{r}
+# Let's improve our picture a bit
+gplot(Krackhardt_HighTech$Friendship_SymMin,
+      gmode = "graph",           # type of network: undirected #digraph: directed
+      mode = "circle",           # how the nodes are positioned
+      vertex.cex = 0.8,           # the size of the node shapes
+      displaylabels = TRUE,      # to add the node labels
+      label.pos = 1,             # to position the labels below the node shapes
+      label.cex = 0.8,            # to decrease the size of the node labels
+      edge.col = "grey70")       # to make the color of the ties/edges 30% black and 70% white
+```
+
+
+
+```{r}
+# Let's improve our picture a bit more
+gplot(Krackhardt_HighTech$Friendship_SymMin,
+      gmode = "graph",           # type of network: undirected
+      vertex.cex= 0.8,           # the size of the node shapes
+      displaylabels = TRUE,      # to add the node labels
+      label.pos = 1,             # to position the labels below the node shapes
+      label.cex = 0.8,            # to decrease the size of the node labels
+      edge.color = "grey70")       # to make the color of the ties/edges 30% black and 70% white
+```
+
+
+```{r}
+# 2. Plotting using the "igraph" package
+#########################################
+KHF_SymMin_i = graph_from_adjacency_matrix(Krackhardt_HighTech$Friendship_SymMin,
+                                          mode="undirected", diag=FALSE)
+#########################################
+# Let's inspect the "igraph" object that was created:
+plot(KHF_SymMin_i, layout = layout_in_circle)
+KHF_SymMin_i
+```
+
+
+```{r}
+# Improving the plot
+plot(KHF_SymMin_i, 
+     layout = layout_in_circle,       # how the nodes are positioned
+     vertex.size = 8,                 # the size of the node shapes
+     vertex.label.cex = 0.8,          # to decrease the size of the node labels
+     vertex.label.family = "",        # change the font (default is Times New Roman here)
+     vertex.label.color = "black",    # change the color of the labels to black (default blue)
+     vertex.label.dist=1.1,         # change the distance of the labels from the center of the node shape (default is 0)
+     vertex.label.degree=pi/2,      # to position the labels below the node shapes
+     edge.color="grey70",           # to make the color of the ties/edges 30% black and 70% white
+     edge.width=2)                  # increase the width of the ties/edges.
+
+# Improving the plot
+plot(KHF_SymMin_i, 
+     vertex.size = 8,                 # the size of the node shapes
+     vertex.label.cex = 0.8,          # to decrease the size of the node labels
+     vertex.label.family = "",        # change the font (default is Times New Roman here)
+     vertex.label.color = "black",    # change the color of the labels to black (default blue)
+     vertex.label.dist = 1.1,         # change the distance of the labels from the center of the node shape (default is 0)
+     vertex.label.degree = pi/2,      # to position the labels below the node shapes
+     edge.color = "grey70",           # to make the color of the ties/edges 30% black and 70% white
+     edge.width = 2)                  # increase the width of the ties/edges.
+```
+
+
+```{r}
+## threejs
+#data(KHF_SymMin_i)
+#graphjs(KHF_SymMin_i, bg="black")
+```
+
+
+- - - 
+
+#### EXERCISES
+
+- Use the extra datasets provided in dropbox.
+
+- Go to the website: [https://rpubs.com/ASNR2022/Chapter7_Practice](https://rpubs.com/ASNR2022/Chapter7_Practice)
+
+- or [https://sites.google.com/view/asnr-2022/home/7-visualization/practice-7-1-visualization](https://sites.google.com/view/asnr-2022/home/7-visualization/practice-7-1-visualization)
+
+- and check out some more advanced ways to visualize networks.
+
+```{r}
+# EXERCISES
+
+
+
+#for example read in the Wolfe_Primates and then select the JointPresence network.
+
+#gplot(Wolfe_Primates$JointPresence>6,
+#      gmode="graph",                                      # type of network: undirected
+#      coord=Wolfe_Primates$Attributes[,c(2,4)],           # coordinates to be use
+#      vertex.cex=.8,                                      # the size of the node shapes
+#      vertex.col=(Wolfe_Primates$Attributes$Gender==1)*8, # a vector which is used to
+
+#define the color of each node (0=white and 8=grey)
+#      displaylabels=TRUE,                                 # to add the node labels
+#      label.pos=1,                                        # to position the labels below the node shapes
+#      label.cex=.7,                                       # to decrease the size of the node labels to 50% of the default
+#      edge.col="grey70")                                  # to make the color of the ties/edges 30% black and 70% white
+```
+
+
+
+#### END OF SCRIPT 1
+
+
+
+
+------------------------------------------------------------------------
+
+**Eric Hsienchen Chu**
+
+UW-Madison @Economics
+
+Editor-in-Chief \| UW Equilibrium: The Undergraduate Journal of Economics
+
+[Previous Editions](https://issuu.com/uwequilibrium.com) \| [Online Journal](https://equilibriumecon.wisc.edu/)

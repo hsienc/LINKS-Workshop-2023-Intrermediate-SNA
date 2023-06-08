@@ -1,0 +1,237 @@
+---
+author: "Eric Hsienchen Chu"
+output:
+  html_document: default
+  pdf_document: default
+editor_options:
+  markdown:
+    wrap: sentence
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE,
+                      error = TRUE, fig.align="center", fig.height = 5, fig.width = 8)
+library(tidyverse)
+library(stringr)
+library(lubridate)
+#library(plm)       # Panel data analysis library
+#library(car)       # Companion to applied regression 
+#library(tseries)   # For timeseries analysis
+#library(lmtest)    # For hetoroskedasticity analysis
+#library(directlabels)
+#library(ggrepel)
+#library(ggtext)
+#library(gganimate)
+#library(gifski)
+#library(kableExtra)
+#library(ggpubr)
+#library(rddtools)
+#library(magrittr)
+#library(maps)
+#library(mapdata)
+#library(broom)  # Convert models to data frames
+#library(rdrobust)  # For robust nonparametric regression discontinuity
+#library(estimatr)  # Run 2SLS models in one step with iv_robust()
+#library(ivreg)
+#library(ivmodel)
+#library(gtools)
+
+library(sna)
+library(igraph)
+library(threejs)
+
+
+library(sna)
+library(igraph)
+library(threejs)
+
+
+#source("../viridis.R")
+```
+
+## [SNA LINKS 2023] 
+
+#### Author: Eric Hsienchen Chu
+
+#### Date: June 6, 2022
+
+
+- - -
+
+#### Instructor: Filip Agneessens
+
+#### SCRIPT Day2 - [Intermediate SNA with R (LINKS Workshop 2023](https://www.linksworkshop.org/intermediate-sna-r))
+
+- - -
+
+#### I. Reciprocity Index (Benchmark: 0 - Density - 1)
+
+
+```{r}
+# Return to our example on Part4_WholeNetwork_Slide 33-34
+RG0 = matrix(c(
+0, 0, 0, 1, 0, 0,
+0, 0, 1, 0, 0, 0,
+0, 1, 0, 0, 0, 0,
+1, 1, 1, 0, 1, 1,
+0, 0, 1, 1, 0, 1,
+0, 0, 0, 0, 1, 0),6,6)
+
+(RG0_dens = gden(RG0))
+
+# Reciprocity?
+sna::dyad.census(RG0)
+
+sna::grecip(RG0, measure = c("edgewise"))
+```
+
+
+```{r}
+# Could we have such network by chance?
+# Generate Random Network from a matrix of Bernoulli parameters
+rgraph(n = 10, m = 1, tprob = 0.2,
+       mode="digraph", diag = FALSE, replace = FALSE,
+       tielist = NULL, return.as.edgelist = FALSE)
+```
+
+
+```{r}
+# Our example N = 6
+# Generate Random Network from a matrix of Bernoulli parameters
+RG1 = rgraph(n = 6, m = 1000, tprob = RG0_dens, # prob is our density
+            mode="digraph", diag = F, replace = F,
+            tielist = NULL, return.as.edgelist = F)
+
+RG1[1, , ] # give our the first matrix
+```
+
+
+```{r}
+# Some descriptive statistics
+gden(RG1)
+mean(gden(RG1)) # should converge to Density (= 0.4) in this case
+hist(gden(RG1))
+
+mean(sna::grecip(RG1, measure = c("edgewise")))
+
+hist(sna::grecip(RG1, measure = c("edgewise")))
+
+# 0.6667 = our reciprocity calculation = sna::grecip(RG0, measure = c("edgewise"))
+mean(sna::grecip(RG1, measure = c("edgewise")) > 0.6667) 
+```
+
+
+
+```{r}
+# Transitivity?
+sna::gtrans(RG0)
+mean(sna::gtrans(RG1))
+hist(sna::gtrans(RG1))
+mean(sna::gtrans(RG1) > 0.4375)
+```
+
+```{r}
+# Transitivity... with matrix algebra
+(RG0SQ = RG0%*%RG0)
+
+diag(RG0SQ) = 0
+sum(RG0SQ)
+sum(RG0SQ*RG0)
+sum(RG0SQ*RG0)/sum(RG0SQ)
+```
+
+
+```{r}
+# Cyclicality... with matrix algebra
+(RG0SQ = RG0%*%RG0)
+diag(RG0SQ) = 0
+
+sum(RG0SQ)
+sum(RG0SQ*t(RG0))
+sum(RG0SQ*t(RG0))/sum(RG0SQ)
+
+MR1<-matrix(1,1000,3)
+for (ni in 1:1000)
+{
+  RGi<-RG1[ni,,]%*%RG1[ni,,]
+  diag(RGi)<-0
+  MR1[ni,1]<-sum(RGi)
+  MR1[ni,2]<-sum(RGi*RG1[ni,,])
+  MR1[ni,3]<-MR1[ni,2]/MR1[ni,1]
+}
+mean(MR1[,3])
+hist(MR1[,3])
+mean(MR1[,3]<0.1875)
+```
+
+
+```{r}
+# Conditional uniform graph hypothesis testing
+# cugtest(dat, FUN, reps=1000, gmode="digraph", cmode="density", 
+#        diag=FALSE, g1=1, g2=2, ...)
+```
+
+
+```{r}
+# Reading in a csv file
+# First set your working directory (i.e., where your files are)
+setwd("/Users/hsien-chenchu/Desktop/SNA-LINKS2023")
+
+# We first create an empty list object:
+Krackhardt_HighTech = list()
+
+# Now we read in the data and add different elements to it:
+Krackhardt_HighTech$Advice = as.matrix(
+  read.csv("Krackhardt_HighTech_Advice.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+Krackhardt_HighTech$Friendship = as.matrix(
+  read.csv("Krackhardt_HighTech_Friendship.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+
+Krackhardt_HighTech$ReportTo = as.matrix(
+  read.csv("Krackhardt_HighTech_ReportTo.csv", 
+           stringsAsFactors=FALSE, row.names=1)
+  )
+
+Krackhardt_HighTech$Attributes = read.csv(
+  "Krackhardt_HighTech_Attributes.csv", 
+  stringsAsFactors=FALSE, row.names=1
+  )
+```
+
+
+```{r}
+sna::gden(Krackhardt_HighTech$Advice)
+sna::grecip(Krackhardt_HighTech$Advice,
+            measure = c("edgewise"))
+sna::gtrans(Krackhardt_HighTech$Advice)
+```
+
+
+```{r}
+sna::gden(Krackhardt_HighTech$Friendship)
+sna::grecip(Krackhardt_HighTech$Friendship,
+            measure = c("edgewise"))
+sna::gtrans(Krackhardt_HighTech$Friendship)
+```
+
+
+```{r}
+sna::gden(Krackhardt_HighTech$ReportTo)
+sna::grecip(Krackhardt_HighTech$ReportTo,
+            measure = c("edgewise"))
+sna::gtrans(Krackhardt_HighTech$ReportTo)
+
+```
+
+
+
+
+
+
+
+
+
+
